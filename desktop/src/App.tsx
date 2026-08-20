@@ -17,7 +17,7 @@ function App() {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    const code = "0000"; // Static code for frictionless auto-connect
     setRoomCode(code);
     
     // 1. Connect to Signaling Server
@@ -135,12 +135,11 @@ function App() {
         </div>
       ) : (
         <div className="waiting-area">
-          <p>{connected ? "Ready to Receive" : "Pairing Code"}</p>
-          <h1 className="room-code">{roomCode}</h1>
+          <p>{connected ? "Ready to Receive" : "Waiting for Phone..."}</p>
           <p className="hint">
             {connected 
               ? "Draw an X on your phone to teleport files here. Or drop files here to send to phone." 
-              : "Enter this code on your phone to connect."}
+              : "Make sure the mobile app is open."}
           </p>
         </div>
       )}

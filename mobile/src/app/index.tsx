@@ -45,10 +45,17 @@ export default function HomeScreen() {
   const dataChannelRef = useRef<any>(null); // For WebRTC data channel
 
   useEffect(() => {
+    const staticRoomCode = '0000';
+    setRoomCode(staticRoomCode);
+    
     const socket = io(SIGNALING_SERVER);
     socketRef.current = socket;
 
-    socket.on('connect', () => console.log('Connected to signaling server'));
+    socket.on('connect', () => {
+      console.log('Connected to signaling server');
+      socket.emit('join-room', staticRoomCode);
+      setConnected(true); // Auto-connect instantly
+    });
 
     socket.on('peer-joined', () => {
       console.log("Desktop acknowledged connection!");
@@ -231,19 +238,7 @@ export default function HomeScreen() {
       
       {!connected ? (
         <View style={styles.pairingContainer}>
-          <Text style={styles.subtitle}>Enter 4-digit code from desktop</Text>
-          <TextInput 
-            style={styles.input} 
-            maxLength={4} 
-            keyboardType="number-pad"
-            value={roomCode}
-            onChangeText={setRoomCode}
-            placeholder="0000"
-            placeholderTextColor="#555"
-          />
-          <TouchableOpacity style={styles.button} onPress={connectToDesktop}>
-            <Text style={styles.buttonText}>Connect</Text>
-          </TouchableOpacity>
+          <Text style={styles.subtitle}>Connecting to desktop...</Text>
         </View>
       ) : (
         <>
