@@ -6,7 +6,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } fr
 import * as Haptics from 'expo-haptics';
 import { io, Socket } from 'socket.io-client';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 
 const { width, height } = Dimensions.get('window');
