@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, Dimensions, TextInput, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, Dimensions, TextInput, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { io, Socket } from 'socket.io-client';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 
 const { width, height } = Dimensions.get('window');
 
@@ -30,6 +33,8 @@ export default function HomeScreen() {
   const [teleporting, setTeleporting] = useState(false);
   const [roomCode, setRoomCode] = useState('');
   const [connected, setConnected] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<any>(null);
+  const [receiving, setReceiving] = useState(false);
   
   const scale = useSharedValue(1);
   const translateY = useSharedValue(0);
@@ -50,6 +55,36 @@ export default function HomeScreen() {
       setConnected(true);
     });
 
+    socket.on("file-transfer-start", () => {
+      setReceiving(true);
+    });
+
+    socket.on("file-transfer-end", () => {
+      setReceiving(false);
+    });
+
+    socket.on("file-transfer-data", async (data: { fileName: string, fileData: string }) => {
+      try {
+        console.log("Received file data:", data.fileName);
+        // Save base64 string to a temporary file
+        const fileUri = `${FileSystem.documentDirectory}${data.fileName || 'teleported_file.jpg'}`;
+        await FileSystem.writeAsStringAsync(fileUri, data.fileData, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        // Save to Camera Roll
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status === 'granted') {
+          await MediaLibrary.saveToLibraryAsync(fileUri);
+          alert("Teleported file saved to your photos!");
+        } else {
+          alert("Saved to app directory, but missing permissions for Camera Roll.");
+        }
+      } catch (e) {
+        console.error("Failed to save file:", e);
+      }
+    });
+
     return () => {
       socket.disconnect();
     };
@@ -63,6 +98,23 @@ export default function HomeScreen() {
     }
   };
 
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      setSelectedImage({
+        uri: asset.uri,
+        fileName: asset.fileName || asset.uri.split('/').pop(),
+        size: asset.fileSize || 0
+      });
+    }
+  };
+
   const animatedStyle = useAnimatedStyle(() => {
     return {
       transform: [
@@ -73,9 +125,15 @@ export default function HomeScreen() {
     };
   });
 
-  const triggerTeleport = () => {
+  const triggerTeleport = async () => {
     if (!connected || !socketRef.current) {
       alert("Not connected to desktop yet!");
+      setStrokes([]);
+      return;
+    }
+
+    if (!selectedImage) {
+      alert("Please tap the photo placeholder to pick an image first!");
       setStrokes([]);
       return;
     }
@@ -83,10 +141,31 @@ export default function HomeScreen() {
     setTeleporting(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     
+    // Read the file as base64
+    let base64Data = "";
+    try {
+      base64Data = await FileSystem.readAsStringAsync(selectedImage.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+    } catch (e) {
+      console.error("Failed to read image:", e);
+      alert("Failed to read image data.");
+      setTeleporting(false);
+      setStrokes([]);
+      return;
+    }
+
     // Send directly via Socket.io instead of WebRTC for Expo Go compatibility
     socketRef.current.emit('file-transfer-start', { roomId: roomCode });
     
-    // Simulate file transfer delay
+    // Send actual data
+    socketRef.current.emit('file-transfer-data', { 
+      roomId: roomCode, 
+      fileName: selectedImage.fileName, 
+      fileData: base64Data 
+    });
+
+    // Simulate file transfer delay for animation
     setTimeout(() => {
       socketRef.current?.emit('file-transfer-end', { roomId: roomCode });
     }, 1500);
@@ -104,6 +183,8 @@ export default function HomeScreen() {
         opacity.value = 1;
         setTeleporting(false);
         setStrokes([]);
+        // Clear selected image after teleporting
+        setSelectedImage(null);
       }, 2000);
     }, 200);
   };
@@ -112,7 +193,7 @@ export default function HomeScreen() {
     .runOnJS(true)
     .onStart(() => {})
     .onEnd((e) => {
-      if (teleporting || !connected) return;
+      if (teleporting || receiving || !connected) return;
       
       const newStroke = {
         startX: e.x - e.translationX,
@@ -166,17 +247,33 @@ export default function HomeScreen() {
         </View>
       ) : (
         <>
-          <Text style={styles.subtitle}>Connected! Draw an "X" over the file.</Text>
+          <Text style={styles.subtitle}>
+            {receiving 
+              ? "Receiving file from Desktop..." 
+              : "Tap to pick a photo, then draw an 'X' to teleport it!"}
+          </Text>
           <GestureDetector gesture={pan}>
             <View style={styles.gestureArea}>
               <Animated.View style={[styles.fileCard, animatedStyle]}>
-                <View style={styles.imagePlaceholder}>
-                  <Text style={styles.imageText}>📸 Photo.jpg</Text>
-                </View>
-                <View style={styles.fileDetails}>
-                  <Text style={styles.fileName}>IMG_1234.HEIC</Text>
-                  <Text style={styles.fileSize}>4.2 MB</Text>
-                </View>
+                <TouchableOpacity style={{flex: 1}} onPress={pickImage} activeOpacity={0.8} disabled={receiving}>
+                  <View style={styles.imagePlaceholder}>
+                    {selectedImage ? (
+                      <Image source={{ uri: selectedImage.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    ) : receiving ? (
+                      <Text style={styles.imageText}>✨</Text>
+                    ) : (
+                      <Text style={styles.imageText}>📸 Photo.jpg</Text>
+                    )}
+                  </View>
+                  <View style={styles.fileDetails}>
+                    <Text style={styles.fileName}>
+                      {selectedImage ? selectedImage.fileName : receiving ? "Incoming_File..." : "Tap to pick a photo"}
+                    </Text>
+                    <Text style={styles.fileSize}>
+                      {selectedImage ? `${(selectedImage.size / (1024 * 1024)).toFixed(2)} MB` : ""}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
               </Animated.View>
             </View>
           </GestureDetector>

@@ -65,6 +65,14 @@ io.on('connection', (socket) => {
     socket.to(data.roomId).emit('file-transfer-end');
   });
 
+  socket.on('file-transfer-data', (data) => {
+    socket.to(data.roomId).emit('file-transfer-data', {
+      fileName: data.fileName,
+      fileData: data.fileData,
+      sender: socket.id
+    });
+  });
+
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);
   });
