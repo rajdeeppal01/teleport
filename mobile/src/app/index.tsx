@@ -12,7 +12,7 @@ import * as MediaLibrary from 'expo-media-library';
 const { width, height } = Dimensions.get('window');
 
 // REPLACE WITH YOUR COMPUTER'S LOCAL IP ADDRESS
-const SIGNALING_SERVER = "http://192.168.1.12:3001"; 
+const SIGNALING_SERVER = "https://thirty-parts-arrive.loca.lt"; 
 
 function isDiagonal(startX: number, startY: number, endX: number, endY: number) {
   const dx = Math.abs(endX - startX);
@@ -48,7 +48,11 @@ export default function HomeScreen() {
     const staticRoomCode = '0000';
     setRoomCode(staticRoomCode);
     
-    const socket = io(SIGNALING_SERVER);
+    const socket = io(SIGNALING_SERVER, {
+      extraHeaders: {
+        "Bypass-Tunnel-Reminder": "true"
+      }
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => {

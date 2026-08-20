@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { fromByteArray, toByteArray } from "base64-js";
 import "./App.css";
 
-const SIGNALING_SERVER = "http://192.168.1.12:3001"; // Change to local IP if testing across devices
+const SIGNALING_SERVER = "http://localhost:3001"; // Connect locally
 
 function App() {
   const [roomCode, setRoomCode] = useState("");
