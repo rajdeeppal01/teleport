@@ -56,6 +56,15 @@ io.on('connection', (socket) => {
     });
   });
 
+  // Forward file transfer events
+  socket.on('file-transfer-start', (data) => {
+    socket.to(data.roomId).emit('file-transfer-start');
+  });
+
+  socket.on('file-transfer-end', (data) => {
+    socket.to(data.roomId).emit('file-transfer-end');
+  });
+
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);
   });

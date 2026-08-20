@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import "./App.css";
 
-const SIGNALING_SERVER = "http://localhost:3001"; // Change to local IP if testing across devices
+const SIGNALING_SERVER = "http://10.6.10.95:3001"; // Change to local IP if testing across devices
 
 function App() {
   const [roomCode, setRoomCode] = useState("");
@@ -26,66 +26,25 @@ function App() {
       socket.emit("create-room", code);
     });
 
-    socket.on("peer-joined", async () => {
-      console.log("Mobile device joined! Initiating WebRTC connection...");
+    socket.on("peer-joined", () => {
+      console.log("Mobile device joined!");
       setConnected(true);
-      await createPeerConnection();
+      socket.emit("peer-joined", code);
     });
 
-    socket.on("offer", async (data) => {
-      if (!peerRef.current) await createPeerConnection();
-      await peerRef.current!.setRemoteDescription(new RTCSessionDescription(data.offer));
-      const answer = await peerRef.current!.createAnswer();
-      await peerRef.current!.setLocalDescription(answer);
-      socket.emit("answer", { answer, roomId: code });
+    socket.on("file-transfer-start", () => {
+      setReceiving(true);
     });
 
-    socket.on("ice-candidate", async (data) => {
-      if (peerRef.current && data.candidate) {
-        await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-      }
+    socket.on("file-transfer-end", () => {
+      setReceiving(false);
+      setReceivedFiles(prev => [...prev, "Teleported_File"]);
     });
 
     return () => {
       socket.disconnect();
     };
   }, []);
-
-  const createPeerConnection = async () => {
-    const peer = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    });
-
-    peer.onicecandidate = (e) => {
-      if (e.candidate) {
-        socketRef.current?.emit("ice-candidate", {
-          candidate: e.candidate,
-          roomId: roomCode
-        });
-      }
-    };
-
-    // Listen for data channel (incoming files)
-    peer.ondatachannel = (event) => {
-      const channel = event.channel;
-      
-      channel.onopen = () => console.log("Data channel opened");
-      
-      channel.onmessage = (e) => {
-        if (typeof e.data === "string" && e.data === "START_FILE") {
-          setReceiving(true);
-        } else if (typeof e.data === "string" && e.data === "END_FILE") {
-          setReceiving(false);
-          setReceivedFiles(prev => [...prev, "Teleported_File"]);
-        } else {
-          // Here we would append array buffer chunks and save to OS
-          // For the prototype we just trigger the animation
-        }
-      };
-    };
-
-    peerRef.current = peer;
-  };
 
   return (
     <div className="container" data-tauri-drag-region>

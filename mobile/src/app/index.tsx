@@ -9,7 +9,7 @@ import { io, Socket } from 'socket.io-client';
 const { width, height } = Dimensions.get('window');
 
 // REPLACE WITH YOUR COMPUTER'S LOCAL IP ADDRESS
-const SIGNALING_SERVER = "http://192.168.1.100:3001"; 
+const SIGNALING_SERVER = "http://10.6.10.95:3001"; 
 
 function isDiagonal(startX: number, startY: number, endX: number, endY: number) {
   const dx = Math.abs(endX - startX);
@@ -45,68 +45,22 @@ export default function HomeScreen() {
 
     socket.on('connect', () => console.log('Connected to signaling server'));
 
-    socket.on('offer', async (data) => {
-      console.log('Received offer from desktop');
-      if (!peerRef.current) setupWebRTC();
-      
-      const peer = peerRef.current!;
-      await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      socket.emit('answer', { answer, roomId: roomCode });
-    });
-
-    socket.on('ice-candidate', async (data) => {
-      if (peerRef.current && data.candidate) {
-        await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-      }
+    socket.on('peer-joined', () => {
+      console.log("Desktop acknowledged connection!");
+      setConnected(true);
     });
 
     return () => {
       socket.disconnect();
     };
-  }, [roomCode]);
+  }, []);
 
   const connectToDesktop = () => {
     if (roomCode.length === 4 && socketRef.current) {
-      setupWebRTC();
       socketRef.current.emit('join-room', roomCode);
-    }
-  };
-
-  const setupWebRTC = () => {
-    const peer = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    });
-
-    // Create the data channel for sending files
-    const dataChannel = peer.createDataChannel("fileTransfer");
-    dataChannel.onopen = () => {
-      console.log("Data channel opened! Ready to send.");
+      // Optimistically set connected for the UI
       setConnected(true);
-    };
-    dataChannelRef.current = dataChannel;
-
-    peer.onicecandidate = (e) => {
-      if (e.candidate && socketRef.current) {
-        socketRef.current.emit("ice-candidate", {
-          candidate: e.candidate,
-          roomId: roomCode
-        });
-      }
-    };
-    
-    // We are the initiator (offerer)
-    peer.createOffer().then(offer => {
-      return peer.setLocalDescription(offer);
-    }).then(() => {
-      socketRef.current?.emit('offer', {
-        offer: peer.localDescription,
-        roomId: roomCode
-      });
-    });
-
-    peerRef.current = peer;
+    }
   };
 
   const animatedStyle = useAnimatedStyle(() => {
@@ -120,7 +74,7 @@ export default function HomeScreen() {
   });
 
   const triggerTeleport = () => {
-    if (!connected || !dataChannelRef.current) {
+    if (!connected || !socketRef.current) {
       alert("Not connected to desktop yet!");
       setStrokes([]);
       return;
@@ -129,11 +83,12 @@ export default function HomeScreen() {
     setTeleporting(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     
-    // Send via WebRTC
-    dataChannelRef.current.send("START_FILE");
+    // Send directly via Socket.io instead of WebRTC for Expo Go compatibility
+    socketRef.current.emit('file-transfer-start', { roomId: roomCode });
+    
     // Simulate file transfer delay
     setTimeout(() => {
-      dataChannelRef.current.send("END_FILE");
+      socketRef.current?.emit('file-transfer-end', { roomId: roomCode });
     }, 1500);
     
     // Animation
