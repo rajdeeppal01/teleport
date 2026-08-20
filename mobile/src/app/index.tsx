@@ -12,7 +12,7 @@ import * as MediaLibrary from 'expo-media-library';
 const { width, height } = Dimensions.get('window');
 
 // REPLACE WITH YOUR COMPUTER'S LOCAL IP ADDRESS
-const SIGNALING_SERVER = "http://10.6.10.95:3001"; 
+const SIGNALING_SERVER = "http://192.168.1.12:3001"; 
 
 function isDiagonal(startX: number, startY: number, endX: number, endY: number) {
   const dx = Math.abs(endX - startX);
